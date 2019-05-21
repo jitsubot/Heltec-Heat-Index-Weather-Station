@@ -1,0 +1,222 @@
+// Heltec with OLED display Weather Station version 1.
+#include <ESP8266WiFi.h>
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_BMP280.h>
+#include <DHT.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 32 // OLED display height, in pixels
+#define OLED_RESET     D0 // Reset pin # (or -1 if sharing Arduino reset pin)
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+const char* ThingSpeakServer = "api.thingspeak.com";
+const char* ssid     = "TuxBot"; // Your ssid
+const char* password = "******"; // Your Password
+
+WiFiClient client;
+String apiKey = "IJRW18DCYTW9XZ3C"; 
+String header;
+#define DHTTYPE    DHT22     // DHT 22 (AM2302)
+#define DHTPIN D3     // Digital pin connected to the DHT sensor 
+//WiFiServer server(80);
+DHT dht(DHTPIN, DHTTYPE);
+Adafruit_BMP280 bmp; // I2C
+
+
+void setup() {
+  Serial.begin(115200); 
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C); 
+display.clearDisplay();
+dht.begin();
+  if (!bmp.begin(0x76)) {
+    Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+    while (1);
+  }
+
+  /* Default settings from datasheet. */
+  bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,     /* Operating Mode. */
+                  Adafruit_BMP280::SAMPLING_X2,     /* Temp. oversampling */
+                  Adafruit_BMP280::SAMPLING_X16,    /* Pressure oversampling */
+                  Adafruit_BMP280::FILTER_X16,      /* Filtering. */
+                  Adafruit_BMP280::STANDBY_MS_500);
+  
+ // Initialize device.
+WiFi.begin();
+
+Serial.print("Connecting to ");
+Serial.println(ssid);
+WiFi.begin(ssid, password);
+while (WiFi.status() != WL_CONNECTED) {
+delay(500);
+Serial.print(".");
+}
+ 
+Serial.println("");
+Serial.println("WiFi is connected");
+//server.begin();
+//Serial.println("Server started");
+//Serial.println(WiFi.localIP());
+
+
+}
+
+
+void loop() {
+   
+// Reading temperature or humidity takes about 250 milliseconds!
+  // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+  float h = dht.readHumidity();
+  // Read temperature as Celsius (the default)
+  float t = dht.readTemperature();
+  // Read temperature as Fahrenheit (isFahrenheit = true)
+  float f = dht.readTemperature(true);
+  // Check if any reads failed and exit early (to try again).
+  if (isnan(h) || isnan(t) || isnan(f)) {
+    Serial.println(F("Failed to read from DHT sensor!"));
+    return;}
+     delay (2000);
+    // Compute heat index in Fahrenheit (the default)
+  float hif = dht.computeHeatIndex(f, h);
+  // Compute heat index in Celsius (isFahreheit = false)
+  float hic = dht.computeHeatIndex(t, h, false);
+  Serial.print(F("Humidity: "));
+  Serial.print(h);
+  Serial.print(F("%  Temperature: "));
+  Serial.print(t);
+  Serial.println(F("°C "));
+  Serial.print(f);
+  Serial.print(F("°F  Heat index: "));
+  Serial.print(hic);
+  Serial.print(F("°C "));
+  Serial.print(hif);
+  Serial.println(F("°F"));
+  Serial.print(F("Pressure = "));
+  Serial.print(bmp.readPressure());
+  Serial.println(" Pa");
+  Serial.print(F("Approx altitude = "));
+  Serial.print(bmp.readAltitude(1013.25)); /* Adjusted to local forecast! */
+  Serial.println(" m");
+   delay(2000); 
+
+display.clearDisplay();
+   
+ 
+  // DHT Reading
+// Displays Temperature
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,0);
+        display.print("T: ");
+        display.print(t);
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,0);
+        display.print("        c");
+  // Displays Humidity
+        display.setTextSize(1);
+        display.setCursor(60,0);
+        display.print("H: ");
+        display.print(h);
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(60,0);
+        display.print("         %");
+ // Displays Heat Index
+        display.setTextSize(1);
+        display.setCursor(0,9);
+        display.print("Heat Index: ");
+        display.print(hic);
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,9);
+        display.print("                   C");
+  //BMP reading
+       // Displays Air Pressure
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,17);
+        display.print("P: ");
+        display.print(bmp.readPressure());
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,17);
+        display.print("             hPa");
+   // Displays Altitude
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,25);
+        display.print("A: ");
+        display.print(bmp.readAltitude(1013.25));
+        display.setTextColor(WHITE);
+        display.setTextSize(1);
+        display.setCursor(0,25);
+        display.print("         m");
+         delay(5000);  
+    
+
+
+display.display();
+//display.clearDisplay();
+//delay(6000);
+    float T = t;
+    float H = h;
+    float HI = hic;
+    float P = bmp.readPressure();
+    float A = bmp.readAltitude(1013.25);
+    
+    if (client.connect(ThingSpeakServer,80))   //   "184.106.153.149" or api.thingspeak.com
+                      {  
+                            
+                             String postStr = apiKey;
+                             postStr +="&field1=";
+                             postStr += String(t);
+                             postStr +="&field2=";
+                             postStr += String(h);
+                             postStr +="&field3=";
+                             postStr += String(HI);
+                             postStr +="&field4=";
+                             postStr += String(P);
+                             postStr +="&field5=";
+                             postStr += String(A);
+                             postStr +="&field6=";
+                             //postStr += String(C);
+                             //postStr +="&field7=";
+                             //postStr += String(V);
+                             
+                             postStr += "\r\n\r\n";
+ 
+                             client.print("POST /update HTTP/1.1\n");
+                             client.print("Host: api.thingspeak.com\n");
+                             client.print("Connection: close\n");
+                             client.print("X-THINGSPEAKAPIKEY: "+apiKey+"\n");
+                             client.print("Content-Type: application/x-www-form-urlencoded\n");
+                             client.print("Content-Length: ");
+                             client.print(postStr.length());
+                             client.print("\n\n");
+                             client.print(postStr);
+ 
+                             Serial.print("Temperature: ");
+                             Serial.print(t);
+                             Serial.print(" C, Humidity: ");
+                             Serial.print(h);
+                             Serial.print(" %, Heat Index: ");
+                             
+                             Serial.print(HI);
+                             Serial.print(" F, Air Pressure: ");
+                             Serial.print(P);
+                             Serial.print(" hPa, Altitude: ");
+                             Serial.print(A);
+                             Serial.print(" m,");
+                             Serial.println(" m. Send to Thingspeak.");
+                        }
+          client.stop();
+ 
+          Serial.println("Waiting...");
+  
+  // thingspeak needs minimum 15 sec delay between updates, i've set it to 30 seconds
+  delay(10000);  
+    
+          }
